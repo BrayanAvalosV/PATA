@@ -1,0 +1,14 @@
+{
+  "content": ["./index.html", "./src/**/*.{js,jsx}"],
+  "theme": {
+    "extend": {
+      "colors": {
+        "primary": "#4CAF50",
+        "dark": "#388E3C",
+        "light": "#E8F5E9",
+        "beige": "#FFF8E1",
+        "text": "#333333"
+      }
+    }
+  }
+}

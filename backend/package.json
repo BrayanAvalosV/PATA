@@ -1,0 +1,19 @@
+{
+  "name": "pata-backend",
+  "version": "1.0.0",
+  "description": "API para PATA (publicaciones de adopción y extraviados)",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.6.0",
+    "morgan": "^1.10.1"
+  }
+}

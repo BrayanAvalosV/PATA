@@ -15,6 +15,13 @@ const UsuarioSchema = new mongoose.Schema(
 
     // Opcional
     redSocial: { type: String, default: "" },
+
+    // Rol para moderación / panel admin
+    rol: {
+      type: String,
+      enum: ["usuario", "admin"],
+      default: "usuario",
+    },
   },
   { timestamps: true }
 );

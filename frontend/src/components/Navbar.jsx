@@ -69,6 +69,7 @@ export default function Navbar() {
             {navItem("/", "Inicio")}
             {navItem("/adopta", "Adopta")}
             {navItem("/extraviados", "Extraviados")}
+            {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
             {user && navItem("/publicar", "Publicar")}
           </div>
 
@@ -111,6 +112,7 @@ export default function Navbar() {
           {navItem("/", "Inicio")}
           {navItem("/adopta", "Adopta")}
           {navItem("/extraviados", "Extraviados")}
+          {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
           {user && navItem("/publicar", "Publicar")}
           <div className="h-px bg-green-200 my-1" />
           {!user ? (

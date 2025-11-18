@@ -1,108 +1,192 @@
+// frontend/src/components/PublicarMascota.jsx
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getUser, getToken } from "../services/session";
+import MapaSelector from "./MapaSelector";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function PublicarMascota() {
-  const [tipoPublicacion, setTipoPublicacion] = useState("");
-  const [imagen, setImagen] = useState(null);
+  const navigate = useNavigate();
+
+  const [tipoPublicacion, setTipoPublicacion] = useState(""); // "adopcion" | "extraviado"
   const [preview, setPreview] = useState(null);
+  const [imagenFile, setImagenFile] = useState(null);
 
-  const usuario = getUser();        // si hay sesión, lo usamos como contacto
-  const token = getToken();         // si hay token, lo mandamos en Authorization
+  const [form, setForm] = useState({
+    nombre: "",
+    tipoMascota: "",
+    raza: "",
+    sexo: "",
+    edad: "",
+    tamano: "",
+    microchip: false,
+    vacunasAlDia: false,
+    desparasitado: false,
+    esterilizado: false,
+    salud: "",
+    region: "",
+    comuna: "",
+    descripcion: "",
+    ubicacion: "", // texto libre para extraviado
+  });
 
-  // 🔹 Convierte imagen a Base64
+  // Para mapa de extraviados
+  const [ultimaUbicacion, setUltimaUbicacion] = useState(null); // { lat, lng }
+  const [radioMetros, setRadioMetros] = useState(300);
+
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState("");
+
+  const usuario = getUser();
+  const token = getToken();
+
+  // Imagen -> Base64
   const handleImagenChange = (e) => {
-    const file = e.target.files[0];
-    setImagen(file);
+    const file = e.target.files?.[0];
+    setImagenFile(file || null);
+    setPreview(null);
+
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result);
+      reader.onloadend = () => setPreview(reader.result?.toString() || null);
       reader.readAsDataURL(file);
-    } else {
-      setPreview(null);
     }
+  };
+
+  const handleChange = (e) => {
+    const { name, type, value, checked } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
     if (!tipoPublicacion) {
-      alert("Por favor selecciona el tipo de publicación.");
+      setError("Selecciona el tipo de publicación.");
       return;
     }
 
-    const formData = new FormData(e.target);
-
-    // Base común
-    const mascota = {
-      tipoPublicacion,
-      nombre: formData.get("nombre") || "Sin nombre",
-      tipoMascota: formData.get("tipoMascota") || "",
-      raza: formData.get("raza") || "",
-      sexo: formData.get("sexo") || "",
-      edad: formData.get("edad") || "",
-      tamano: formData.get("tamano") || "",
-      microchip: !!formData.get("microchip"),
-      vacunas: !!formData.get("vacunas"),
-      desparasitado: !!formData.get("desparasitado"),
-      esterilizado: !!formData.get("esterilizado"),
-      salud: formData.get("salud") || "",
-      region: formData.get("region") || "",
-      comuna: formData.get("comuna") || "",
-      descripcion: formData.get("descripcion") || "",
-      imagen: preview || null,
-
-      // Contacto: si hay usuario logeado lo usamos; si no, fallback estático
-      contacto: usuario
-        ? {
-            nombre: usuario.nombre,
-            telefono: usuario.telefono,
-            correo: usuario.email,
-            redSocial: usuario.redSocial || "",
-          }
-        : {
-            nombre: "Usuario estático",
-            telefono: "+56 9 0000 0000",
-            correo: "usuario@ejemplo.cl",
-          },
-
-      // opcional: guardar relación con el usuario
-      usuarioId: usuario?.id || null,
-    };
-
-    // Campos específicos para EXTRAVIADO
-    if (tipoPublicacion === "extraviado") {
-      mascota.estado = formData.get("estado") || "Perdido";
-      mascota.ubicacion = formData.get("ubicacion") || "";
+    if (!form.nombre.trim()) {
+      setError("El nombre de la mascota es obligatorio.");
+      return;
     }
 
+    if (!token) {
+      setError("Debes iniciar sesión para publicar.");
+      return;
+    }
+
+    if (tipoPublicacion === "extraviado" && !ultimaUbicacion) {
+      setError("Selecciona en el mapa la zona aproximada donde se perdió la mascota.");
+      return;
+    }
+
+    const contacto = usuario
+      ? {
+          nombre: usuario.nombre || "",
+          telefono: usuario.telefono || "",
+          correo: usuario.email || "",
+          redSocial: usuario.redSocial || "",
+        }
+      : {
+          nombre: "",
+          telefono: "",
+          correo: "",
+          redSocial: "",
+        };
+
+    // Cuerpo a enviar al backend
+    const mascota = {
+      tipoPublicacion,
+      nombre: form.nombre || "Sin nombre",
+      tipoMascota: form.tipoMascota || "",
+      raza: form.raza || "",
+      sexo: form.sexo || "",
+      // estos campos se usan sobre todo en adopción
+      edad: tipoPublicacion === "adopcion" ? form.edad || "" : "",
+      tamano: tipoPublicacion === "adopcion" ? form.tamano || "" : "",
+      microchip: tipoPublicacion === "adopcion" ? !!form.microchip : false,
+      vacunasAlDia: tipoPublicacion === "adopcion" ? !!form.vacunasAlDia : false,
+      desparasitado: tipoPublicacion === "adopcion" ? !!form.desparasitado : false,
+      esterilizado: tipoPublicacion === "adopcion" ? !!form.esterilizado : false,
+      salud: tipoPublicacion === "adopcion" ? form.salud || "" : "",
+      region: form.region || "",
+      comuna: form.comuna || "",
+      descripcion: form.descripcion || "",
+      imagen: preview || null,
+      contacto,
+    };
+
+    if (tipoPublicacion === "extraviado") {
+      mascota.estado = "Perdido";
+      mascota.ubicacion = form.ubicacion || "";
+      mascota.ultimaUbicacion = {
+        lat: ultimaUbicacion.lat,
+        lng: ultimaUbicacion.lng,
+        radioMetros: radioMetros || 300,
+      };
+    }
+
+    setEnviando(true);
     try {
-      const response = await fetch(`${API}/api/mascotas`, {
+      const res = await fetch(`${API}/api/mascotas`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}), // si hay token, lo enviamos
+          Authorization: token ? `Bearer ${token}` : "",
         },
         body: JSON.stringify(mascota),
       });
 
-      if (response.ok) {
-        alert("¡Mascota publicada correctamente! 🐾");
-        // Reset visual
-        e.target.reset();
-        setPreview(null);
-        setImagen(null);
-        setTipoPublicacion("");
-        window.location.href =
-          tipoPublicacion === "adopcion" ? "/adopta" : "/extraviados";
-      } else {
-        const err = await response.json().catch(() => ({}));
-        alert(`Error al publicar la mascota. ${err?.error || ""}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Error al publicar la mascota.");
       }
-    } catch (error) {
-      console.error(error);
-      alert("Error de conexión con el servidor.");
+
+      alert(
+        "¡Mascota enviada para revisión! Un administrador deberá aprobarla antes de que sea visible."
+      );
+
+      // Reset
+      setTipoPublicacion("");
+      setPreview(null);
+      setImagenFile(null);
+      setUltimaUbicacion(null);
+      setRadioMetros(300);
+      setForm({
+        nombre: "",
+        tipoMascota: "",
+        raza: "",
+        sexo: "",
+        edad: "",
+        tamano: "",
+        microchip: false,
+        vacunasAlDia: false,
+        desparasitado: false,
+        esterilizado: false,
+        salud: "",
+        region: "",
+        comuna: "",
+        descripcion: "",
+        ubicacion: "",
+      });
+
+      // Redirigir
+      if (tipoPublicacion === "adopcion") {
+        navigate("/adopta");
+      } else {
+        navigate("/extraviados");
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error al publicar la mascota.");
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -124,240 +208,334 @@ export default function PublicarMascota() {
         <source src="/fondo-pata.mp4" type="video/mp4" />
       </video>
 
-      <div className="absolute inset-0 bg-black/30"></div>
+      {/* Capa oscura */}
+      <div className="absolute inset-0 bg-black/40" />
 
-      <div className="relative z-10 max-w-3xl w-full bg-white/95 backdrop-blur-md p-8 rounded-2xl shadow-2xl">
-        <h2 className="text-3xl font-bold text-center text-green-700 mb-6">
-          Publicar Mascota <span className="text-2xl">🐾</span>
-        </h2>
+      {/* Contenido */}
+      <div className="relative z-10 w-full max-w-4xl mx-auto px-4 pb-12">
+        <div className="bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-6 md:p-8 border border-green-100">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-green-800 mb-2">
+            Publicar mascota
+          </h1>
+          <p className="text-sm md:text-base text-gray-700 mb-4">
+            Las publicaciones se revisan antes de mostrarse públicamente, para
+            cuidar a las personas y a los animales de la región.
+          </p>
 
-        {/* Tipo de publicación */}
-        <div className="mb-6 text-center">
-          <label className="block font-semibold text-gray-700 mb-2">
-            ¿Qué deseas publicar?
-          </label>
-          <div className="flex justify-center space-x-6">
-            <button
-              onClick={() =>
-                setTipoPublicacion(
-                  tipoPublicacion === "adopcion" ? "" : "adopcion"
-                )
-              }
-              className={`px-6 py-2 rounded-lg font-semibold border transition ${
-                tipoPublicacion === "adopcion"
-                  ? "bg-green-600 text-white border-green-600"
-                  : "bg-white text-green-700 border-green-700 hover:bg-green-50"
-              }`}
-              type="button"
-            >
-              En Adopción
-            </button>
-
-            <button
-              onClick={() =>
-                setTipoPublicacion(
-                  tipoPublicacion === "extraviado" ? "" : "extraviado"
-                )
-              }
-              className={`px-6 py-2 rounded-lg font-semibold border transition ${
-                tipoPublicacion === "extraviado"
-                  ? "bg-amber-500 text-white border-amber-500"
-                  : "bg-white text-amber-600 border-amber-600 hover:bg-amber-50"
-              }`}
-              type="button"
-            >
-              Extraviado
-            </button>
-          </div>
-        </div>
-
-        {/* Formulario dinámico */}
-        {tipoPublicacion && (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 transition-all duration-500"
-          >
-            {/* Nombre */}
-            <div>
-              <label className="block text-gray-700 font-medium mb-1">
-                Nombre de la mascota
-              </label>
-              <input
-                name="nombre"
-                type="text"
-                required
-                className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
-              />
+          {error && (
+            <div className="mb-4 bg-red-50 text-red-800 text-sm px-4 py-2 rounded-lg border border-red-200">
+              {error}
             </div>
+          )}
 
-            {/* ADOPCIÓN */}
-            {tipoPublicacion === "adopcion" && (
-              <>
-                <div className="grid md:grid-cols-2 gap-4">
+          {/* Selector tipo publicación */}
+          <div className="mb-6">
+            <span className="block text-sm font-semibold text-gray-800 mb-2">
+              Tipo de publicación
+            </span>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setTipoPublicacion("adopcion")}
+                className={`flex-1 px-4 py-2 rounded-xl border text-sm font-semibold transition ${
+                  tipoPublicacion === "adopcion"
+                    ? "bg-green-700 text-white border-green-800"
+                    : "bg-white text-green-800 border-green-300 hover:bg-green-50"
+                }`}
+              >
+                Adopción
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoPublicacion("extraviado")}
+                className={`flex-1 px-4 py-2 rounded-xl border text-sm font-semibold transition ${
+                  tipoPublicacion === "extraviado"
+                    ? "bg-amber-600 text-white border-amber-700"
+                    : "bg-white text-amber-800 border-amber-300 hover:bg-amber-50"
+                }`}
+              >
+                Mascota extraviada
+              </button>
+            </div>
+          </div>
+
+          {/* Formulario */}
+          {tipoPublicacion && (
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-4 transition-all duration-500"
+            >
+              {/* Nombre */}
+              <div>
+                <label className="block text-gray-700 font-medium mb-1">
+                  Nombre de la mascota
+                </label>
+                <input
+                  name="nombre"
+                  type="text"
+                  value={form.nombre}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+
+              {/* Datos básicos */}
+              <div className="grid md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Tipo de mascota
+                  </label>
                   <select
                     name="tipoMascota"
-                    className="border p-2 rounded"
-                    required
+                    value={form.tipoMascota}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
                   >
-                    <option value="">Tipo de mascota</option>
+                    <option value="">Selecciona</option>
                     <option value="perro">Perro</option>
                     <option value="gato">Gato</option>
                     <option value="otro">Otro</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Raza
+                  </label>
                   <input
                     name="raza"
                     type="text"
-                    placeholder="Raza (opcional)"
-                    className="border p-2 rounded"
+                    value={form.raza}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Opcional"
                   />
                 </div>
-
-                <div className="grid md:grid-cols-3 gap-4">
-                  <select name="sexo" className="border p-2 rounded" required>
-                    <option value="">Sexo</option>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Sexo
+                  </label>
+                  <select
+                    name="sexo"
+                    value={form.sexo}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">No especificar</option>
                     <option value="macho">Macho</option>
                     <option value="hembra">Hembra</option>
-                    <option value="desconocido">Desconocido</option>
-                  </select>
-                  <select name="edad" className="border p-2 rounded" required>
-                    <option value="">Edad aproximada</option>
-                    <option value="cachorro">Cachorro (0–11 meses)</option>
-                    <option value="joven">Joven (1–3 años)</option>
-                    <option value="adulto">Adulto (4–8 años)</option>
-                    <option value="senior">Senior (9+ años)</option>
-                  </select>
-                  <select name="tamano" className="border p-2 rounded">
-                    <option value="">Tamaño</option>
-                    <option value="pequeno">Pequeño (-10kg)</option>
-                    <option value="mediano">Mediano (10–25kg)</option>
-                    <option value="grande">Grande (+25kg)</option>
                   </select>
                 </div>
+              </div>
 
-                {/* Salud */}
-                <div className="mt-4 grid md:grid-cols-2 gap-2 text-sm">
-                  <label>
-                    <input type="checkbox" name="microchip" /> Posee microchip
-                  </label>
-                  <label>
-                    <input type="checkbox" name="vacunas" /> Vacunas al día
-                  </label>
-                  <label>
-                    <input type="checkbox" name="desparasitado" /> Desparasitado
-                  </label>
-                  <label>
-                    <input type="checkbox" name="esterilizado" /> Esterilizado /
-                    Castrado
-                  </label>
-                </div>
+              {/* Edad / tamaño / salud SOLO para adopción */}
+              {tipoPublicacion === "adopcion" && (
+                <>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">
+                        Edad aproximada
+                      </label>
+                      <input
+                        name="edad"
+                        type="text"
+                        value={form.edad}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Cachorro, adulto, senior, etc."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">
+                        Tamaño
+                      </label>
+                      <select
+                        name="tamano"
+                        value={form.tamano}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="">No especificar</option>
+                        <option value="pequeno">Pequeño</option>
+                        <option value="mediano">Mediano</option>
+                        <option value="grande">Grande</option>
+                      </select>
+                    </div>
+                  </div>
 
-                <select
-                  name="salud"
-                  className="border p-2 rounded w-full"
-                  required
-                >
-                  <option value="">Estado de salud</option>
-                  <option value="sano">Sano</option>
-                  <option value="cuidados">Requiere cuidados</option>
-                  <option value="desconocido">Desconocido</option>
-                </select>
+                  <div className="grid md:grid-cols-2 gap-3 text-sm">
+                    <div className="space-y-1">
+                      <label className="font-medium text-gray-700">
+                        Salud y cuidados
+                      </label>
+                      <textarea
+                        name="salud"
+                        value={form.salud}
+                        onChange={handleChange}
+                        rows={3}
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Vacunas, enfermedades, carácter, etc."
+                      />
+                    </div>
+                    <div className="space-y-1 mt-6 md:mt-0">
+                      <label className="font-medium text-gray-700">
+                        Estado sanitario
+                      </label>
+                      <div className="grid grid-cols-1 gap-1">
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="microchip"
+                            checked={form.microchip}
+                            onChange={handleChange}
+                          />
+                          <span>Posee microchip</span>
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="vacunasAlDia"
+                            checked={form.vacunasAlDia}
+                            onChange={handleChange}
+                          />
+                          <span>Vacunas al día</span>
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="desparasitado"
+                            checked={form.desparasitado}
+                            onChange={handleChange}
+                          />
+                          <span>Desparasitado</span>
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="esterilizado"
+                            checked={form.esterilizado}
+                            onChange={handleChange}
+                          />
+                          <span>Esterilizado</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
-                {/* Ubicación */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <select
-                    name="region"
-                    className="border p-2 rounded"
-                    required
-                  >
-                    <option value="">Región</option>
-                    <option value="Coquimbo">Coquimbo</option>
-                    <option value="Valparaíso">Valparaíso</option>
-                    <option value="Metropolitana">Metropolitana</option>
-                    <option value="Biobío">Biobío</option>
-                  </select>
+              {/* Región / comuna */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Región
+                  </label>
                   <input
-                    name="comuna"
-                    placeholder="Comuna"
-                    className="border p-2 rounded"
-                    required
+                    name="region"
+                    type="text"
+                    value={form.region}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Ej: Coquimbo"
                   />
                 </div>
-              </>
-            )}
-
-            {/* EXTRAVIADO */}
-            {tipoPublicacion === "extraviado" && (
-              <>
                 <div>
-                  <label className="block text-gray-700 font-medium mb-1">
-                    Estado
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Comuna
                   </label>
-                  <select
-                    name="estado"
-                    className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option>Perdido</option>
-                    <option>Encontrado</option>
-                  </select>
+                  <input
+                    name="comuna"
+                    type="text"
+                    value={form.comuna}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Ej: La Serena"
+                  />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-gray-700 font-medium mb-1">
-                    Última ubicación conocida
+              {/* Extra para EXTRAVIADO: mapa + ubicación textual */}
+              {tipoPublicacion === "extraviado" && (
+                <div className="space-y-2 border border-amber-200 bg-amber-50/70 rounded-xl p-3">
+                  <h2 className="text-sm font-semibold text-amber-800">
+                    Zona donde se perdió
+                  </h2>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Referencia textual (opcional)
                   </label>
                   <input
                     name="ubicacion"
                     type="text"
-                    className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-amber-500"
-                    placeholder="Ej: Plaza de Armas, La Serena"
+                    value={form.ubicacion}
+                    onChange={handleChange}
+                    className="w-full border rounded-lg px-3 py-2 text-sm mb-2"
+                    placeholder="Ej: Cerca de la plaza, sector Las Compañías..."
                   />
-                </div>
-              </>
-            )}
 
-            {/* Descripción e imagen */}
-            <div>
-              <label className="block text-gray-700 font-medium mb-1">
-                Descripción
-              </label>
-              <textarea
-                name="descripcion"
-                rows="3"
-                className="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-600"
-                placeholder="Escribe una breve descripción..."
-              ></textarea>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-medium mb-1">
-                Imagen
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImagenChange}
-                className="w-full border rounded-lg px-4 py-2"
-              />
-              {preview && (
-                <div className="mt-3 text-center">
-                  <img
-                    src={preview}
-                    alt="Vista previa"
-                    className="w-48 h-48 object-cover rounded-lg mx-auto shadow-md"
+                  <MapaSelector
+                    posicion={ultimaUbicacion}
+                    setPosicion={setUltimaUbicacion}
+                    radioMetros={radioMetros}
+                    setRadioMetros={setRadioMetros}
                   />
-                  <p className="text-sm text-gray-500 mt-1">Vista previa</p>
                 </div>
               )}
-            </div>
 
-            <button
-              type="submit"
-              className="w-full bg-green-700 text-white font-semibold py-2 rounded-lg hover:bg-green-800 transition"
-            >
-              Publicar
-            </button>
-          </form>
-        )}
+              {/* Descripción general */}
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Descripción general
+                </label>
+                <textarea
+                  name="descripcion"
+                  value={form.descripcion}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder={
+                    tipoPublicacion === "extraviado"
+                      ? "Cuenta cómo se perdió, señas particulares, collar, etc."
+                      : "Cuenta detalles importantes de la mascota, su carácter, y cualquier cosa que ayude a encontrarle hogar."
+                  }
+                />
+              </div>
+
+              {/* Imagen */}
+              <div>
+                <label className="block text-sm text-gray-700 font-medium mb-1">
+                  Imagen
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImagenChange}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                />
+                {preview && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-600 mb-1">
+                      Vista previa:
+                    </p>
+                    <img
+                      src={preview}
+                      alt="Vista previa"
+                      className="max-h-56 rounded-xl border border-gray-200 object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Botón */}
+              <button
+                type="submit"
+                disabled={enviando}
+                className="w-full bg-green-700 text-white font-semibold py-3 rounded-xl hover:bg-green-800 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {enviando ? "Enviando..." : "Publicar para revisión"}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-green-900"></div>

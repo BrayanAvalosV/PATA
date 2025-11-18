@@ -1,7 +1,11 @@
+// backend/src/controllers/mascotas.controller.js
 import Mascota from "../models/Mascota.js";
+import { Usuario } from "../models/usuario.model.js";
+import { sendEmail } from "../utils/mailer.js";
 
 /**
  * POST /api/mascotas
+ * Crea una nueva publicación. Siempre queda en estado "pendiente".
  */
 export const crearMascota = async (req, res, next) => {
   try {
@@ -11,22 +15,26 @@ export const crearMascota = async (req, res, next) => {
       return res.status(400).json({ error: "tipoPublicacion inválido" });
     }
 
-    if (req.uid) body.usuarioId = req.uid;
+    if (!body.nombre) {
+      return res.status(400).json({ error: "El nombre de la mascota es obligatorio" });
+    }
 
+    // Asignar usuario si viene del token
+    if (req.uid) {
+      body.usuarioId = req.uid;
+    }
+
+    // Aseguramos que siempre haya un objeto contacto
     if (!body.contacto) {
-      body.contacto = {
-        nombre: "Usuario estático",
-        telefono: "+56 9 0000 0000",
-        correo: "usuario@ejemplo.cl",
-      };
+      body.contacto = {};
     }
 
-    if (body.tipoPublicacion === "adopcion" && !body.estadoAdopcion) {
-      body.estadoAdopcion = "disponible";
-    }
+    // Estado de publicación siempre pendiente al crear
+    body.estadoPublicacion = "pendiente";
+    body.motivoRechazo = "";
 
     const mascota = await Mascota.create(body);
-    return res.status(201).json(mascota);
+    res.status(201).json(mascota);
   } catch (err) {
     next(err);
   }
@@ -34,54 +42,25 @@ export const crearMascota = async (req, res, next) => {
 
 /**
  * GET /api/mascotas
- * ?tipo=adopcion|extraviado&region=...&comuna=...&page=1&limit=20
- * Flags opcionales:
- *  - incluirAdoptados=true     (por defecto NO incluye adoptados)
- *  - incluirEncontrados=true   (por defecto NO incluye encontrados)
+ * Listado público. Solo muestra publicaciones aprobadas.
+ * Soporta filtros: ?tipo=adopcion|extraviado&region=&comuna=
  */
 export const listarMascotas = async (req, res, next) => {
   try {
-    const { tipo, region, comuna, page = 1, limit = 20 } = req.query;
-    const incluirAdoptados = String(req.query.incluirAdoptados || "false") === "true";
-    const incluirEncontrados = String(req.query.incluirEncontrados || "false") === "true";
+    const { tipo, region, comuna } = req.query;
 
-    const filtro = {};
+    const filter = {
+      estadoPublicacion: "aprobada",
+    };
 
     if (tipo && ["adopcion", "extraviado"].includes(tipo)) {
-      filtro.tipoPublicacion = tipo;
-      if (tipo === "adopcion" && !incluirAdoptados) {
-        filtro.estadoAdopcion = "disponible";
-      }
-      if (tipo === "extraviado" && !incluirEncontrados) {
-        filtro.estado = { $ne: "Encontrado" };
-      }
+      filter.tipoPublicacion = tipo;
     }
-    if (region) filtro.region = region;
-    if (comuna) filtro.comuna = comuna;
+    if (region) filter.region = region;
+    if (comuna) filter.comuna = comuna;
 
-    const pageNum = Math.max(1, Number(page) || 1);
-    const limitNum = Math.max(1, Number(limit) || 20);
-    const skip = (pageNum - 1) * limitNum;
-
-    const [items, total] = await Promise.all([
-      Mascota.find(filtro).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limitNum),
-      Mascota.countDocuments(filtro),
-    ]);
-
-    res.json({ total, page: pageNum, limit: limitNum, items });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * GET /api/mascotas/:id
- */
-export const obtenerMascota = async (req, res, next) => {
-  try {
-    const mascota = await Mascota.findById(req.params.id);
-    if (!mascota) return res.status(404).json({ error: "No encontrada" });
-    res.json(mascota);
+    const mascotas = await Mascota.find(filter).sort({ createdAt: -1 });
+    res.json(mascotas);
   } catch (err) {
     next(err);
   }
@@ -89,15 +68,42 @@ export const obtenerMascota = async (req, res, next) => {
 
 /**
  * GET /api/mascotas/tipo/:tipo
+ * Atajo por tipo, también solo aprobadas.
  */
 export const listarPorTipo = async (req, res, next) => {
   try {
     const { tipo } = req.params;
     if (!["adopcion", "extraviado"].includes(tipo)) {
-      return res.status(400).json({ error: "tipo inválido" });
+      return res.status(400).json({ error: "Tipo inválido" });
     }
-    const items = await Mascota.find({ tipoPublicacion: tipo }).sort({ createdAt: -1, _id: -1 });
-    res.json(items);
+
+    const mascotas = await Mascota.find({
+      tipoPublicacion: tipo,
+      estadoPublicacion: "aprobada",
+    }).sort({ createdAt: -1 });
+
+    res.json(mascotas);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/mascotas/:id
+ * Detalle público. Solo accesible si la publicación está "aprobada".
+ */
+export const obtenerMascota = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const mascota = await Mascota.findById(id);
+
+    if (!mascota) return res.status(404).json({ error: "No encontrada" });
+
+    if (mascota.estadoPublicacion !== "aprobada") {
+      return res.status(404).json({ error: "No disponible" });
+    }
+
+    res.json(mascota);
   } catch (err) {
     next(err);
   }
@@ -113,15 +119,16 @@ export const marcarAdoptado = async (req, res, next) => {
     if (!mascota) return res.status(404).json({ error: "No encontrada" });
 
     if (!mascota.usuarioId || String(mascota.usuarioId) !== String(req.uid)) {
-      return res.status(403).json({ error: "No autorizado" });
+      return res.status(403).json({ error: "No eres el dueño de esta publicación" });
     }
 
     if (mascota.tipoPublicacion !== "adopcion") {
-      return res.status(400).json({ error: "Solo aplica a publicaciones de adopción" });
+      return res.status(400).json({ error: "Solo se puede marcar adoptado en adopciones" });
     }
 
     mascota.estadoAdopcion = "adoptado";
     await mascota.save();
+
     res.json(mascota);
   } catch (err) {
     next(err);
@@ -138,15 +145,16 @@ export const marcarEncontrado = async (req, res, next) => {
     if (!mascota) return res.status(404).json({ error: "No encontrada" });
 
     if (!mascota.usuarioId || String(mascota.usuarioId) !== String(req.uid)) {
-      return res.status(403).json({ error: "No autorizado" });
+      return res.status(403).json({ error: "No eres el dueño de esta publicación" });
     }
 
     if (mascota.tipoPublicacion !== "extraviado") {
-      return res.status(400).json({ error: "Solo aplica a reportes de extraviados" });
+      return res.status(400).json({ error: "Solo se puede marcar encontrado en extraviados" });
     }
 
     mascota.estado = "Encontrado";
     await mascota.save();
+
     res.json(mascota);
   } catch (err) {
     next(err);
@@ -155,7 +163,7 @@ export const marcarEncontrado = async (req, res, next) => {
 
 /**
  * GET /api/mascotas/stats
- * Devuelve contadores para la portada.
+ * Para el componente StatsFloating (adoptados y reencuentros).
  */
 export const statsMascotas = async (_req, res, next) => {
   try {
@@ -167,6 +175,65 @@ export const statsMascotas = async (_req, res, next) => {
     ]);
 
     res.json({ adoptedCount, reunitedCount, totalAdopciones, totalExtraviados });
+  } catch (err) {
+    next(err);
+  }
+};
+export const contactarDuenoMascota = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { mensaje, nombre, telefono, correo, ubicacionVista } = req.body || {};
+
+    const mascota = await Mascota.findById(id).populate("usuarioId").exec();
+    if (!mascota) {
+      return res.status(404).json({ error: "Mascota no encontrada" });
+    }
+
+    if (mascota.tipoPublicacion !== "extraviado") {
+      return res.status(400).json({ error: "Solo se puede contactar en mascotas extraviadas" });
+    }
+
+    const correoDestino =
+      mascota.contacto?.correo ||
+      (mascota.usuarioId && mascota.usuarioId.email);
+
+    if (!correoDestino) {
+      return res
+        .status(400)
+        .json({ error: "No hay correo de contacto disponible para esta publicación." });
+    }
+
+    const nombreMascota = mascota.nombre || "tu mascota";
+    const subject = `Alguien tiene información sobre ${nombreMascota}`;
+
+    let texto = `Hola,\n\nAlguien ha enviado un mensaje desde la página de PATA 4ta Región sobre la mascota "${nombreMascota}".\n\n`;
+
+    texto += `Mensaje:\n${mensaje || "(sin mensaje)"}\n\n`;
+
+    if (ubicacionVista) {
+      texto += `Posible lugar donde la vieron:\n${ubicacionVista}\n\n`;
+    }
+
+    if (nombre || telefono || correo) {
+      texto += "Datos de contacto de quien envía el mensaje:\n";
+      if (nombre) texto += `- Nombre: ${nombre}\n`;
+      if (telefono) texto += `- Teléfono: ${telefono}\n`;
+      if (correo) texto += `- Correo: ${correo}\n`;
+      texto += "\n";
+    } else {
+      texto += "La persona no dejó datos de contacto adicionales.\n\n";
+    }
+
+    texto += "Por favor ten cuidado con posibles intentos de estafa. Verifica bien la información antes de entregar dinero o datos sensibles.\n\n";
+    texto += "Este mensaje fue enviado automáticamente por la página.\n";
+
+    await sendEmail({
+      to: correoDestino,
+      subject,
+      text: texto,
+    });
+
+    res.json({ ok: true, msg: "Mensaje enviado al dueño de la mascota." });
   } catch (err) {
     next(err);
   }

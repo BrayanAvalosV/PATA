@@ -10,7 +10,8 @@ export function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.uid = payload.uid; // <-- ID del usuario autenticado
+    req.uid = payload.uid;        // ID del usuario autenticado
+    req.rol = payload.rol || "usuario"; // rol del usuario
     next();
   } catch {
     return res.status(401).json({ error: "Token inválido" });

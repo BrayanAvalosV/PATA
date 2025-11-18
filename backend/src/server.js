@@ -7,41 +7,46 @@ import mongoose from "mongoose";
 
 import authRoutes from "./routes/auth.routes.js";
 import mascotasRoutes from "./routes/mascotas.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/pata";
 const PORT = process.env.PORT || 4000;
-const ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5179";
+const ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
 // Conexión a Mongo
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log("MongoDB conectado"))
-  .catch((e) => {
-    console.error("Error conectando a MongoDB:", e.message);
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => console.log("✅ Conectado a MongoDB"))
+  .catch((err) => {
+    console.error("❌ Error al conectar a MongoDB:", err);
     process.exit(1);
   });
 
 const app = express();
 
-// CORS (permitimos el front local)
-app.use(cors({
-  origin: true,                       // en dev acepta cualquier http://localhost:*
-  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"], // 👈 incluye PATCH
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-}));
-app.options("*", cors()); // maneja preflight para cualquier ruta
-// Body parsers
+// Middlewares
+app.use(
+  cors({
+    origin: ORIGIN,
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
-
 app.use(morgan("dev"));
 
 // Rutas
 app.use("/api/auth", authRoutes);
 app.use("/api/mascotas", mascotasRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Health-check rápido
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// Manejo de 404
+app.use((req, res, next) => {
+  if (res.headersSent) return next();
+  res.status(404).json({ error: "Ruta no encontrada" });
+});
 
 // Manejo de errores
 app.use((err, _req, res, _next) => {

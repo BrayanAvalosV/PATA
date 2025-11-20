@@ -18,6 +18,8 @@ import StatsFloating from "./components/StatsFloating";
 import MapaGlobalExtraviados from "./components/MapaGlobalExtraviados";
 import AdminSolicitudes from "./components/AdminSolicitudes";
 import AdminRoute from "./components/AdminRoute";
+import ListaFundaciones from "./components/ListaFundaciones";
+import PerfilFundacion from "./components/PerfilFundacion";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -206,7 +208,26 @@ export default function App() {
               </>
             </AdminRoute>
           }
+        />  
+        <Route
+          path="/fundaciones"
+          element={
+            <>
+              <ListaFundaciones />
+              <Footer />
+            </>
+          }
         />
+
+        <Route
+          path="/fundacion/:id"
+          element={
+            <>
+              <PerfilFundacion />
+              <Footer />
+            </>
+          }
+        />  
       </Routes>
     </div>
   );

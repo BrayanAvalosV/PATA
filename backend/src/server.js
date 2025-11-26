@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import authRoutes from "./routes/auth.routes.js";
 import mascotasRoutes from "./routes/mascotas.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import fundacionesRoutes from "./routes/fundaciones.routes.js"; // 🔹 NUEVO
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/pata";
 const PORT = process.env.PORT || 4000;
@@ -38,6 +39,7 @@ app.use(morgan("dev"));
 app.use("/api/auth", authRoutes);
 app.use("/api/mascotas", mascotasRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/fundaciones", fundacionesRoutes); // 🔹 NUEVO
 
 // Health-check rápido
 app.get("/api/health", (_req, res) => res.json({ ok: true }));

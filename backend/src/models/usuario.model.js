@@ -1,27 +1,36 @@
-// backend/src/models/usuario.model.js
+// usuario.model.js
 import mongoose from "mongoose";
 
 const UsuarioSchema = new mongoose.Schema(
   {
-    nombre: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true },
-
-    // Chile
-    rut: { type: String, required: true, unique: true, trim: true }, // ej: 12.345.678-9
-    telefono: { type: String, required: true, trim: true }, // +56 9 ...
-    region: { type: String, default: "" },
-    comuna: { type: String, default: "" },
-
-    // Opcional
-    redSocial: { type: String, default: "" },
-
-    // Rol para moderación / panel admin
-    rol: {
-      type: String,
-      enum: ["usuario", "admin"],
-      default: "usuario",
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    nombre: { type: String, required: true },
+    tipo: { 
+      type: String, 
+      enum: ["individual", "fundacion", "admin"], 
+      default: "individual" 
     },
+    
+    // Campos comunes
+    telefono: String,
+    
+    // Campos específicos para fundaciones
+    nombreFundacion: String,
+    imagenUrl: String,
+    quienesSomos: String,
+    direccion: String,
+    ciudad: String,
+    sitioWeb: String,
+    rut: { 
+      type: String, 
+      sparse: true,  // 🔹 AGREGADO: permite múltiples null
+      unique: true 
+    },
+    
+    // Campos específicos para individuos
+    apellido: String,
+    fechaNacimiento: Date,
   },
   { timestamps: true }
 );

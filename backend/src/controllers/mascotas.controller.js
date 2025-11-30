@@ -1,6 +1,6 @@
 // backend/src/controllers/mascotas.controller.js
 import Mascota from "../models/Mascota.js";
-import {Usuario} from "../models/usuario.model.js"; // 
+import { Usuario } from "../models/usuario.model.js";
 import { sendEmail } from "../utils/mailer.js";
 
 /**
@@ -43,11 +43,11 @@ export const crearMascota = async (req, res, next) => {
 /**
  * GET /api/mascotas
  * Listado público. Solo muestra publicaciones aprobadas.
- * Soporta filtros: ?tipo=adopcion|extraviado&region=&comuna=&usuarioId=
+ * Soporta filtros: ?tipo=adopcion|extraviado&region=&comuna=
  */
 export const listarMascotas = async (req, res, next) => {
   try {
-    const { tipo, region, comuna, usuarioId } = req.query; // 🔹 AGREGADO: usuarioId
+    const { tipo, region, comuna } = req.query;
 
     const filter = {
       estadoPublicacion: "aprobada",
@@ -58,7 +58,6 @@ export const listarMascotas = async (req, res, next) => {
     }
     if (region) filter.region = region;
     if (comuna) filter.comuna = comuna;
-    if (usuarioId) filter.usuarioId = usuarioId; // 🔹 NUEVO: filtro por fundación
 
     const mascotas = await Mascota.find(filter).sort({ createdAt: -1 });
     res.json(mascotas);
@@ -180,7 +179,6 @@ export const statsMascotas = async (_req, res, next) => {
     next(err);
   }
 };
-
 export const contactarDuenoMascota = async (req, res, next) => {
   try {
     const { id } = req.params;

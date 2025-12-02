@@ -106,22 +106,10 @@ export default function MapaGlobalExtraviados() {
                     }}
                   >
                     <Popup>
-                      <div className="text-xs max-w-[200px] space-y-1">
-                        {/* 👇 Foto de la mascota en la burbuja */}
-                        {m.imagen && (
-                          <div className="w-full h-24 rounded-lg overflow-hidden mb-1">
-                            <img
-                              src={m.imagen}
-                              alt={m.nombre || "Mascota extraviada"}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-
+                      <div className="text-xs max-w-[180px] space-y-1">
                         <p className="font-semibold">
                           {m.nombre || "Mascota extraviada"}
                         </p>
-
                         {(m.comuna || m.region) && (
                           <p className="text-[11px] text-gray-700">
                             {[m.comuna, m.region]
@@ -129,7 +117,6 @@ export default function MapaGlobalExtraviados() {
                               .join(", ")}
                           </p>
                         )}
-
                         <Link
                           to={`/post/${m._id}`}
                           className="inline-flex mt-1 text-[11px] text-amber-700 underline"
@@ -138,7 +125,6 @@ export default function MapaGlobalExtraviados() {
                         </Link>
                       </div>
                     </Popup>
-
                     <Marker position={center} />
                   </Circle>
                 );

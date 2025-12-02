@@ -1,45 +1,23 @@
 // frontend/src/components/Navbar.jsx
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { getUser, clearSession } from "../services/session";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const user = getUser();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
 
   const navItem = (to, label) => (
     <Link
       to={to}
       className={`px-3 py-2 rounded-md text-sm font-medium ${
-        pathname === to
-          ? "text-white bg-green-700"
-          : "text-green-800 hover:bg-green-100"
+        pathname === to ? "text-white bg-green-700" : "text-green-800 hover:bg-green-100"
       }`}
       onClick={() => setOpen(false)}
     >
       {label}
     </Link>
-  );
-
-  // 🔹 Botón especial para "Adopta" que siempre forza un ?open=...
-  const adoptaItem = (extraClasses = "") => (
-    <button
-      type="button"
-      onClick={() => {
-        const ts = Date.now();
-        navigate(`/adopta?open=${ts}`);
-        setOpen(false);
-      }}
-      className={`px-3 py-2 rounded-md text-sm font-medium ${
-        pathname === "/adopta"
-          ? "text-white bg-green-700"
-          : "text-green-800 hover:bg-green-100"
-      } ${extraClasses}`}
-    >
-      Adopta
-    </button>
   );
 
   return (
@@ -49,15 +27,13 @@ export default function Navbar() {
       aria-label="Navegación principal"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
         {/* MOBILE: logo + hamburguesa */}
         <div className="h-10 flex items-center md:hidden justify-between">
-          <Link
-            to="/"
-            className="inline-flex items-center"
-            onClick={() => setOpen(false)}
-          >
+          <Link to="/" className="inline-flex items-center" onClick={() => setOpen(false)}>
+            {/* Logo más grande sin alterar la altura de la navbar */}
             <img
-              src={`${import.meta.env.BASE_URL}pata2.png`}
+              src={`${import.meta.env.BASE_URL}pata2.png`} // frontend/public/pata2.png
               alt="PATA"
               className="h-60 w-auto select-none transform scale-150 origin-left"
               draggable="false"
@@ -76,13 +52,9 @@ export default function Navbar() {
 
         {/* DESKTOP: grid de 3 columnas → logo izq / menú centro / usuario der */}
         <div className="hidden md:grid md:grid-cols-3 md:items-center h-16">
-          {/* Col 1: Logo izquierda */}
+          {/* Col 1: Logo izquierda (agrandado con scale, no cambia el layout) */}
           <div className="flex items-center justify-start">
-            <Link
-              to="/"
-              className="inline-flex items-center"
-              onClick={() => setOpen(false)}
-            >
+            <Link to="/" className="inline-flex items-center" onClick={() => setOpen(false)}>
               <img
                 src={`${import.meta.env.BASE_URL}pata2.png`}
                 alt="PATA"
@@ -95,11 +67,10 @@ export default function Navbar() {
           {/* Col 2: Menú centrado */}
           <div className="flex items-center justify-center gap-2">
             {navItem("/", "Inicio")}
-            {adoptaItem()}
+            {navItem("/adopta", "Adopta")}
             {navItem("/extraviados", "Extraviados")}
-            {navItem("/nosotros", "Sobre nosotros")}
-            {user?.rol === "admin" &&
-              navItem("/admin/solicitudes", "Panel admin")}
+            {navItem("/fundaciones", "Fundaciones")} {/* 🔹 NUEVO */}
+            {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
             {user && navItem("/publicar", "Publicar")}
           </div>
 
@@ -140,11 +111,10 @@ export default function Navbar() {
       >
         <div className="px-4 py-3 flex flex-col gap-2">
           {navItem("/", "Inicio")}
-          {adoptaItem("text-left")}
+          {navItem("/adopta", "Adopta")}
           {navItem("/extraviados", "Extraviados")}
-          {navItem("/nosotros", "Sobre nosotros")}
-          {user?.rol === "admin" &&
-            navItem("/admin/solicitudes", "Panel admin")}
+          {navItem("/fundaciones", "Fundaciones")} {/* 🔹 NUEVO */}
+          {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
           {user && navItem("/publicar", "Publicar")}
           <div className="h-px bg-green-200 my-1" />
           {!user ? (

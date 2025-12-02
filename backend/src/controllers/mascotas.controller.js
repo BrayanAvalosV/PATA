@@ -43,7 +43,6 @@ export const crearMascota = async (req, res, next) => {
 /**
  * GET /api/mascotas
  * Listado público. Solo muestra publicaciones aprobadas.
- * Soporta filtros: ?tipo=adopcion|extraviado&region=&comuna=&usuarioId=
  */
 export const listarMascotas = async (req, res, next) => {
   try {
@@ -180,7 +179,6 @@ export const statsMascotas = async (_req, res, next) => {
     next(err);
   }
 };
-
 export const contactarDuenoMascota = async (req, res, next) => {
   try {
     const { id } = req.params;

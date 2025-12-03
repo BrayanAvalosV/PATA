@@ -16,6 +16,10 @@ export default function DetalleMascota() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
+  // 🔹 Fundación (si la publicación la hizo una fundación)
+  const [fundacion, setFundacion] = useState(null);
+  const [loadingFundacion, setLoadingFundacion] = useState(false);
+
   // formulario de contacto
   const [contactForm, setContactForm] = useState({
     nombre: "",
@@ -28,6 +32,7 @@ export default function DetalleMascota() {
   const [contactDone, setContactDone] = useState(false);
   const [contactError, setContactError] = useState("");
 
+  // 🔹 Cargar mascota
   useEffect(() => {
     const fetchMascota = async () => {
       try {
@@ -46,6 +51,25 @@ export default function DetalleMascota() {
     };
     fetchMascota();
   }, [id]);
+
+  // 🔹 Si la mascota tiene usuarioId, intentamos cargar fundación
+  useEffect(() => {
+    const fetchFundacion = async () => {
+      if (!mascota?.usuarioId) return;
+      try {
+        setLoadingFundacion(true);
+        const res = await fetch(`${API}/api/fundaciones/${mascota.usuarioId}`);
+        if (!res.ok) return; // si no existe, asumimos que es usuario normal
+        const data = await res.json().catch(() => ({}));
+        setFundacion(data);
+      } catch (err) {
+        console.warn("No se pudo cargar fundación asociada:", err);
+      } finally {
+        setLoadingFundacion(false);
+      }
+    };
+    fetchFundacion();
+  }, [mascota?.usuarioId]);
 
   const handleContactChange = (e) => {
     const { name, value } = e.target;
@@ -170,6 +194,7 @@ export default function DetalleMascota() {
                 {mascota.nombre || "Mascota sin nombre"}
               </h1>
 
+              {/* Chips de info básica */}
               <div className="flex flex-wrap gap-2 text-xs">
                 {mascota.tipoMascota && (
                   <span className="px-2 py-1 rounded-full bg-green-50 border border-green-200 text-green-900">
@@ -197,6 +222,26 @@ export default function DetalleMascota() {
                   </span>
                 )}
               </div>
+
+              {/* 🔹 Badge "Publicado por fundación" si aplica */}
+              {fundacion && (
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1">
+                  <span className="text-[10px] uppercase tracking-wide text-green-700/80">
+                    Publicado por
+                  </span>
+                  <Link
+                    to={`/fundacion/${fundacion._id || fundacion.id}`}
+                    className="text-xs font-semibold text-green-800 hover:underline"
+                  >
+                    {fundacion.nombreFundacion || fundacion.nombre}
+                  </Link>
+                  {loadingFundacion && (
+                    <span className="text-[10px] text-gray-400">
+                      cargando…
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="text-sm text-gray-700">
                 {(mascota.region || mascota.comuna) && (
@@ -271,8 +316,8 @@ export default function DetalleMascota() {
                   Última zona donde fue vista la mascota
                 </h2>
                 <p className="text-xs md:text-sm text-gray-600 mb-2">
-                  El círculo muestra un área aproximada, no una dirección exacta,
-                  para proteger la privacidad de la persona que hizo la
+                  El círculo muestra un área aproximada, no una dirección
+                  exacta, para proteger la privacidad de la persona que hizo la
                   publicación.
                 </p>
 

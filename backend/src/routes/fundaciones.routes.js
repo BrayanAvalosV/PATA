@@ -1,36 +1,72 @@
-import express from "express";
-import {Usuario} from "../models/usuario.model.js";
+// backend/src/routes/fundaciones.routes.js
+import { Router } from "express";
+import Fundacion from "../models/fundacion.model.js";
+// 👇 IMPORT CORRECTO: con llaves y mismo nombre que en RequireAuth.js
+import { requireAuth } from "../middlewares/RequireAuth.js";
 
+const router = Router();
 
-const router = express.Router();
-
-// Obtener todas las fundaciones
-router.get("/", async (req, res) => {
+/**
+ * GET /api/fundaciones
+ * Lista todas las fundaciones
+ */
+router.get("/", async (_req, res, next) => {
   try {
-    const fundaciones = await Usuario.find({ tipo: "fundacion" }).select("-password");
+    const fundaciones = await Fundacion.find().sort({ createdAt: -1 }).lean();
     res.json(fundaciones);
-  } catch (error) {
-    console.error("Error al obtener fundaciones:", error);
-    res.status(500).json({ error: "Error al obtener fundaciones" });
+  } catch (err) {
+    next(err);
   }
 });
 
-// Obtener una fundación por ID
-router.get("/:id", async (req, res) => {
+/**
+ * GET /api/fundaciones/:id
+ * Perfil de una fundación
+ */
+router.get("/:id", async (req, res, next) => {
   try {
-    const fundacion = await Usuario.findOne({
-      _id: req.params.id,
-      tipo: "fundacion",
-    }).select("-password");
-
+    const fundacion = await Fundacion.findById(req.params.id).lean();
     if (!fundacion) {
       return res.status(404).json({ error: "Fundación no encontrada" });
     }
-
     res.json(fundacion);
-  } catch (error) {
-    console.error("Error al obtener fundación:", error);
-    res.status(500).json({ error: "Error al obtener fundación" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/fundaciones
+ * Crear fundación asociada al usuario autenticado
+ */
+router.post("/", requireAuth, async (req, res, next) => {
+  try {
+    const {
+      nombreFundacion,
+      ciudad,
+      direccion,
+      telefono,
+      email,
+      sitioWeb,
+      imagenUrl,
+      quienesSomos,
+    } = req.body;
+
+    const fundacion = await Fundacion.create({
+      usuarioId: req.uid, // 👈 viene del middleware requireAuth
+      nombreFundacion,
+      ciudad,
+      direccion,
+      telefono,
+      email,
+      sitioWeb,
+      imagenUrl,
+      quienesSomos,
+    });
+
+    res.status(201).json(fundacion);
+  } catch (err) {
+    next(err);
   }
 });
 

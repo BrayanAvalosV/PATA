@@ -74,7 +74,11 @@ const MascotaSchema = new mongoose.Schema(
       default: "pendiente",
     },
     motivoRechazo: { type: String, default: "" },
-    revisadoPor: { type: mongoose.Schema.Types.ObjectId, ref: "Usuario", default: null },
+    revisadoPor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Usuario",
+      default: null,
+    },
     fechaRevision: { type: Date, default: null },
 
     // Relación con usuario
@@ -84,12 +88,23 @@ const MascotaSchema = new mongoose.Schema(
       default: null,
     },
 
+    // 🔹 Relación con fundación (para mostrar en el perfil de la fundación)
+    fundacionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Fundacion",
+      default: null,
+    },
+
     // Datos de contacto originales
     contacto: { type: ContactoSchema, default: () => ({}) },
   },
   { timestamps: true }
 );
 
-MascotaSchema.index({ tipoPublicacion: 1, estadoPublicacion: 1, createdAt: -1 });
+MascotaSchema.index({
+  tipoPublicacion: 1,
+  estadoPublicacion: 1,
+  createdAt: -1,
+});
 
 export default mongoose.model("Mascota", MascotaSchema);

@@ -97,8 +97,10 @@ export default function Navbar() {
             {navItem("/", "Inicio")}
             {adoptaItem()}
             {navItem("/extraviados", "Extraviados")}
-            {navItem("/fundaciones", "Fundaciones")} {/* 🔹 NUEVO */}
-            {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
+            {navItem("/fundaciones", "Fundaciones")}
+            {navItem("/nosotros", "Nosotros")}
+            {user?.rol === "admin" &&
+              navItem("/admin/solicitudes", "Panel admin")}
             {user && navItem("/publicar", "Publicar")}
           </div>
 
@@ -141,8 +143,10 @@ export default function Navbar() {
           {navItem("/", "Inicio")}
           {adoptaItem("text-left")}
           {navItem("/extraviados", "Extraviados")}
-          {navItem("/fundaciones", "Fundaciones")} {/* 🔹 NUEVO */}
-          {user?.rol === "admin" && navItem("/admin/solicitudes", "Panel admin")}
+          {navItem("/fundaciones", "Fundaciones")}
+          {navItem("/nosotros", "Nosotros")}
+          {user?.rol === "admin" &&
+            navItem("/admin/solicitudes", "Panel admin")}
           {user && navItem("/publicar", "Publicar")}
           <div className="h-px bg-green-200 my-1" />
           {!user ? (

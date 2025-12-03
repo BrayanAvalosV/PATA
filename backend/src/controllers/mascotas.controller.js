@@ -1,7 +1,8 @@
 // backend/src/controllers/mascotas.controller.js
 import Mascota from "../models/Mascota.js";
-import {Usuario} from "../models/usuario.model.js"; // 
+import { Usuario } from "../models/usuario.model.js";
 import { sendEmail } from "../utils/mailer.js";
+import Fundacion from "../models/fundacion.model.js"; // 👈 NUEVO
 
 /**
  * POST /api/mascotas
@@ -16,12 +17,22 @@ export const crearMascota = async (req, res, next) => {
     }
 
     if (!body.nombre) {
-      return res.status(400).json({ error: "El nombre de la mascota es obligatorio" });
+      return res
+        .status(400)
+        .json({ error: "El nombre de la mascota es obligatorio" });
     }
 
     // Asignar usuario si viene del token
     if (req.uid) {
       body.usuarioId = req.uid;
+
+      // 👇 si este usuario tiene fundación, asociarla a la mascota
+      const fundacion = await Fundacion.findOne({ usuarioId: req.uid });
+      if (fundacion) {
+        body.fundacionId = fundacion._id;
+      } else {
+        body.fundacionId = null;
+      }
     }
 
     // Aseguramos que siempre haya un objeto contacto
@@ -43,10 +54,11 @@ export const crearMascota = async (req, res, next) => {
 /**
  * GET /api/mascotas
  * Listado público. Solo muestra publicaciones aprobadas.
+ * Soporta filtros: ?tipo=adopcion|extraviado&region=&comuna=&usuarioId=&fundacionId=
  */
 export const listarMascotas = async (req, res, next) => {
   try {
-    const { tipo, region, comuna, usuarioId } = req.query; // 🔹 AGREGADO: usuarioId
+    const { tipo, region, comuna, usuarioId, fundacionId } = req.query;
 
     const filter = {
       estadoPublicacion: "aprobada",
@@ -57,7 +69,14 @@ export const listarMascotas = async (req, res, next) => {
     }
     if (region) filter.region = region;
     if (comuna) filter.comuna = comuna;
-    if (usuarioId) filter.usuarioId = usuarioId; // 🔹 NUEVO: filtro por fundación
+
+    // 🔹 NUEVO: filtros por usuario o fundación
+    if (usuarioId) {
+      filter.usuarioId = usuarioId;
+    }
+    if (fundacionId) {
+      filter.fundacionId = fundacionId;
+    }
 
     const mascotas = await Mascota.find(filter).sort({ createdAt: -1 });
     res.json(mascotas);
@@ -119,11 +138,15 @@ export const marcarAdoptado = async (req, res, next) => {
     if (!mascota) return res.status(404).json({ error: "No encontrada" });
 
     if (!mascota.usuarioId || String(mascota.usuarioId) !== String(req.uid)) {
-      return res.status(403).json({ error: "No eres el dueño de esta publicación" });
+      return res
+        .status(403)
+        .json({ error: "No eres el dueño de esta publicación" });
     }
 
     if (mascota.tipoPublicacion !== "adopcion") {
-      return res.status(400).json({ error: "Solo se puede marcar adoptado en adopciones" });
+      return res
+        .status(400)
+        .json({ error: "Solo se puede marcar adoptado en adopciones" });
     }
 
     mascota.estadoAdopcion = "adoptado";
@@ -145,11 +168,15 @@ export const marcarEncontrado = async (req, res, next) => {
     if (!mascota) return res.status(404).json({ error: "No encontrada" });
 
     if (!mascota.usuarioId || String(mascota.usuarioId) !== String(req.uid)) {
-      return res.status(403).json({ error: "No eres el dueño de esta publicación" });
+      return res
+        .status(403)
+        .json({ error: "No eres el dueño de esta publicación" });
     }
 
     if (mascota.tipoPublicacion !== "extraviado") {
-      return res.status(400).json({ error: "Solo se puede marcar encontrado en extraviados" });
+      return res
+        .status(400)
+        .json({ error: "Solo se puede marcar encontrado en extraviados" });
     }
 
     mascota.estado = "Encontrado";
@@ -167,30 +194,52 @@ export const marcarEncontrado = async (req, res, next) => {
  */
 export const statsMascotas = async (_req, res, next) => {
   try {
-    const [adoptedCount, reunitedCount, totalAdopciones, totalExtraviados] = await Promise.all([
-      Mascota.countDocuments({ tipoPublicacion: "adopcion", estadoAdopcion: "adoptado" }),
-      Mascota.countDocuments({ tipoPublicacion: "extraviado", estado: "Encontrado" }),
+    const [
+      adoptedCount,
+      reunitedCount,
+      totalAdopciones,
+      totalExtraviados,
+    ] = await Promise.all([
+      Mascota.countDocuments({
+        tipoPublicacion: "adopcion",
+        estadoAdopcion: "adoptado",
+      }),
+      Mascota.countDocuments({
+        tipoPublicacion: "extraviado",
+        estado: "Encontrado",
+      }),
       Mascota.countDocuments({ tipoPublicacion: "adopcion" }),
       Mascota.countDocuments({ tipoPublicacion: "extraviado" }),
     ]);
 
-    res.json({ adoptedCount, reunitedCount, totalAdopciones, totalExtraviados });
+    res.json({
+      adoptedCount,
+      reunitedCount,
+      totalAdopciones,
+      totalExtraviados,
+    });
   } catch (err) {
     next(err);
   }
 };
+
 export const contactarDuenoMascota = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { mensaje, nombre, telefono, correo, ubicacionVista } = req.body || {};
+    const { mensaje, nombre, telefono, correo, ubicacionVista } =
+      req.body || {};
 
-    const mascota = await Mascota.findById(id).populate("usuarioId").exec();
+    const mascota = await Mascota.findById(id)
+      .populate("usuarioId")
+      .exec();
     if (!mascota) {
       return res.status(404).json({ error: "Mascota no encontrada" });
     }
 
     if (mascota.tipoPublicacion !== "extraviado") {
-      return res.status(400).json({ error: "Solo se puede contactar en mascotas extraviadas" });
+      return res
+        .status(400)
+        .json({ error: "Solo se puede contactar en mascotas extraviadas" });
     }
 
     const correoDestino =
@@ -198,9 +247,10 @@ export const contactarDuenoMascota = async (req, res, next) => {
       (mascota.usuarioId && mascota.usuarioId.email);
 
     if (!correoDestino) {
-      return res
-        .status(400)
-        .json({ error: "No hay correo de contacto disponible para esta publicación." });
+      return res.status(400).json({
+        error:
+          "No hay correo de contacto disponible para esta publicación.",
+      });
     }
 
     const nombreMascota = mascota.nombre || "tu mascota";
@@ -221,10 +271,12 @@ export const contactarDuenoMascota = async (req, res, next) => {
       if (correo) texto += `- Correo: ${correo}\n`;
       texto += "\n";
     } else {
-      texto += "La persona no dejó datos de contacto adicionales.\n\n";
+      texto +=
+        "La persona no dejó datos de contacto adicionales.\n\n";
     }
 
-    texto += "Por favor ten cuidado con posibles intentos de estafa. Verifica bien la información antes de entregar dinero o datos sensibles.\n\n";
+    texto +=
+      "Por favor ten cuidado con posibles intentos de estafa. Verifica bien la información antes de entregar dinero o datos sensibles.\n\n";
     texto += "Este mensaje fue enviado automáticamente por la página.\n";
 
     await sendEmail({
@@ -233,7 +285,10 @@ export const contactarDuenoMascota = async (req, res, next) => {
       text: texto,
     });
 
-    res.json({ ok: true, msg: "Mensaje enviado al dueño de la mascota." });
+    res.json({
+      ok: true,
+      msg: "Mensaje enviado al dueño de la mascota.",
+    });
   } catch (err) {
     next(err);
   }

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Usuario } from "../models/usuario.model.js";
 import { validarRut, limpiarRut } from "../utils/rut.js";
+import Fundacion from "../models/fundacion.model.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_cambia_esto";
 
@@ -42,8 +43,11 @@ export async function register(req, res) {
       region = "",
       comuna = "",
       redSocial = "",
+      tipoUsuario,   // viene desde el frontend ("fundacion" o "persona")
+      fundacion,     // datos extra de fundación (si aplica)
     } = req.body || {};
 
+    // Validaciones básicas
     if (!nombre || !email || !password || !rut || !telefono) {
       return res.status(400).json({ error: "Faltan campos requeridos" });
     }
@@ -66,6 +70,7 @@ export async function register(req, res) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // 1) Crear usuario (siempre con rol "usuario" o el default del schema)
     const user = await Usuario.create({
       nombre,
       email,
@@ -75,8 +80,23 @@ export async function register(req, res) {
       region,
       comuna,
       redSocial,
-      rol: "usuario", // registro público siempre "usuario"
+      // rol: "usuario", // opcional, el schema ya tiene default "usuario"
     });
+
+    // 2) Si es fundación, crear también el documento Fundacion
+    if (tipoUsuario === "fundacion" && fundacion) {
+      await Fundacion.create({
+        usuarioId: user._id,
+        nombreFundacion: fundacion.nombreFundacion || nombre,
+        ciudad: fundacion.ciudad || comuna || "",
+        direccion: "", // si luego agregas en el form, lo llenas aquí
+        telefono: telefono,
+        email: email,
+        sitioWeb: fundacion.sitioWeb || "",
+        imagenUrl: fundacion.imagenUrl || "",
+        quienesSomos: fundacion.quienesSomos || "",
+      });
+    }
 
     const token = signToken(user);
     res.status(201).json({
